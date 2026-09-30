@@ -1,24 +1,34 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { Loader } from './components/Loader';
 
-// TODO (задача 7): сейчас код всех страниц попадает в один бандл.
-// Переведите импорты страниц на React.lazy и добавьте Suspense с fallback.
-import PostsPage from './pages/PostsPage';
-import PostPage from './pages/PostPage';
-import UsersPage from './pages/UsersPage';
-import PhotosPage from './pages/PhotosPage';
-import NotFoundPage from './pages/NotFoundPage';
+// Код каждой страницы -- в отдельном чанке, загружается при первом переходе на неё
+const PostsPage = lazy(() => import('./pages/PostsPage'));
+const PostPage = lazy(() => import('./pages/PostPage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const PhotosPage = lazy(() => import('./pages/PhotosPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<Navigate to="/posts" replace />} />
-        <Route path="/posts" element={<PostsPage />} />
-        <Route path="/posts/:postId" element={<PostPage />} />
-        <Route path="/users" element={<UsersPage />} />
-        <Route path="/photos" element={<PhotosPage />} />
-        <Route path="*" element={<NotFoundPage />} />
+        {/* Suspense внутри Layout: пока грузится чанк, шапка остаётся на месте */}
+        <Route
+          element={
+            <Suspense fallback={<Loader text="Загружаем страницу..." />}>
+              <Outlet />
+            </Suspense>
+          }
+        >
+          <Route path="/" element={<Navigate to="/posts" replace />} />
+          <Route path="/posts" element={<PostsPage />} />
+          <Route path="/posts/:postId" element={<PostPage />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/photos" element={<PhotosPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
       </Route>
     </Routes>
   );

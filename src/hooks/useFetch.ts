@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useState } from 'react';
+
 export type FetchState<T> = {
   data: T | null;
   isLoading: boolean;
@@ -8,29 +10,60 @@ export type FetchState<T> = {
   refetch: () => void;
 };
 
-/**
- * TODO (задача 1): реализуйте хук загрузки данных.
- *
- * Требования:
- * - запрос уходит при монтировании и при каждой смене url;
- * - isLoading = true, пока запрос выполняется;
- * - ответ со статусом 4xx/5xx считается ошибкой (проверьте response.ok);
- * - в status записывается HTTP-статус ответа;
- * - предыдущий запрос отменяется через AbortController
- *   (при смене url и при размонтировании компонента);
- * - AbortError не показывается пользователю как ошибка;
- * - refetch() повторяет запрос по тому же url.
- *
- * Подсказка для refetch: заведите в хуке счётчик попыток
- * и добавьте его в зависимости useEffect.
- */
+type RequestState<T> = Omit<FetchState<T>, 'refetch'>;
+
+class HttpError extends Error {
+  constructor(public status: number) {
+    super(`Ошибка ${status}`);
+  }
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}
+
 export function useFetch<T>(url: string): FetchState<T> {
-  // Заглушка, чтобы проект собирался. Замените её своей реализацией.
-  return {
+  const [state, setState] = useState<RequestState<T>>({
     data: null,
-    isLoading: false,
+    isLoading: true,
     error: null,
     status: null,
-    refetch: () => {},
-  };
+  });
+  // Счётчик попыток: его изменение перезапускает эффект с тем же url
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setState({ data: null, isLoading: true, error: null, status: null });
+
+    async function load() {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+          throw new HttpError(response.status);
+        }
+        const data: T = await response.json();
+        setState({ data, isLoading: false, error: null, status: response.status });
+      } catch (err) {
+        // Запрос отменён (сменился url или компонент размонтирован) -- это не ошибка
+        if (isAbortError(err) || controller.signal.aborted) return;
+
+        setState({
+          data: null,
+          isLoading: false,
+          error: err instanceof Error ? err.message : 'Неизвестная ошибка',
+          status: err instanceof HttpError ? err.status : null,
+        });
+      }
+    }
+
+    load();
+
+    return () => controller.abort();
+  }, [url, attempt]);
+
+  const refetch = useCallback(() => setAttempt(n => n + 1), []);
+
+  return { ...state, refetch };
 }

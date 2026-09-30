@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { endpoints } from '../api/endpoints';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loader } from '../components/Loader';
@@ -6,11 +7,15 @@ import { useFetch } from '../hooks/useFetch';
 import type { Photo } from '../types';
 import { simulateHeavyRender } from '../utils/simulateHeavyRender';
 
-// ЗАДАЧА 6. Страница работает, но тормозит.
-// Найдите проблемы производительности и исправьте их.
-// Логику и внешний вид страницы менять не нужно.
+// ЗАДАЧА 6. Что исправлено -- см. OPTIMIZATION.md в корне проекта.
 
 const ALBUM_IDS = Array.from({ length: 100 }, (_, i) => i + 1);
+
+// Высота строки -- как у .photo-row в index.css
+const ROW_HEIGHT = 56;
+
+// Один Collator на все сравнения: localeCompare без аргументов создаёт его на каждый вызов
+const titleCollator = new Intl.Collator();
 
 type PhotoRowProps = {
   photo: Photo;
@@ -18,7 +23,8 @@ type PhotoRowProps = {
   onToggleFavorite: (id: number) => void;
 };
 
-function PhotoRow({ photo, isFavorite, onToggleFavorite }: PhotoRowProps) {
+// memo: строка перерисовывается, только если изменились её собственные пропсы
+const PhotoRow = memo(function PhotoRow({ photo, isFavorite, onToggleFavorite }: PhotoRowProps) {
   simulateHeavyRender();
 
   return (
@@ -31,15 +37,11 @@ function PhotoRow({ photo, isFavorite, onToggleFavorite }: PhotoRowProps) {
       </button>
     </div>
   );
-}
+});
 
-export default function PhotosPage() {
-  const { data: photos, isLoading, error, refetch } = useFetch<Photo[]>(endpoints.photos);
-
-  const [query, setQuery] = useState('');
-  const [albumId, setAlbumId] = useState('all');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [favorites, setFavorites] = useState<number[]>([]);
+// Таймер живёт в отдельном компоненте: ежесекундный setState
+// перерисовывает только эту строку, а не всю страницу со списком
+function SecondsOnPage() {
   const [secondsOnPage, setSecondsOnPage] = useState(0);
 
   useEffect(() => {
@@ -47,20 +49,100 @@ export default function PhotosPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const visiblePhotos = (photos ?? [])
-    .filter(photo => albumId === 'all' || photo.albumId === Number(albumId))
-    .filter(photo => photo.title.toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) =>
-      sortOrder === 'asc' ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)
-    );
+  return <p className="muted">Вы на странице {secondsOnPage} с</p>;
+}
 
-  const handleToggleFavorite = (id: number) => {
-    if (favorites.includes(id)) {
-      setFavorites(favorites.filter(favoriteId => favoriteId !== id));
-    } else {
-      setFavorites([...favorites, id]);
-    }
-  };
+type PhotoListProps = {
+  photos: Photo[];
+  favorites: Set<number>;
+  onToggleFavorite: (id: number) => void;
+};
+
+// Виртуализированный список: в DOM только видимые строки (плюс небольшой запас)
+const PhotoList = memo(function PhotoList({ photos, favorites, onToggleFavorite }: PhotoListProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: photos.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+    getItemKey: index => photos[index].id,
+  });
+
+  return (
+    <div ref={scrollRef} className="photo-list">
+      <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        {virtualizer.getVirtualItems().map(item => {
+          const photo = photos[item.index];
+          return (
+            <div
+              key={item.key}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: item.size,
+                transform: `translateY(${item.start}px)`,
+              }}
+            >
+              <PhotoRow
+                photo={photo}
+                isFavorite={favorites.has(photo.id)}
+                onToggleFavorite={onToggleFavorite}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+export default function PhotosPage() {
+  const { data: photos, isLoading, error, refetch } = useFetch<Photo[]>(endpoints.photos);
+
+  const [query, setQuery] = useState('');
+  const [albumId, setAlbumId] = useState('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [favorites, setFavorites] = useState<Set<number>>(() => new Set());
+
+  // Поле ввода обновляется сразу, а тяжёлая фильтрация идёт с низким приоритетом
+  const deferredQuery = useDeferredValue(query);
+
+  // Сортировка 5000 записей -- только при загрузке данных и смене порядка
+  const sortedPhotos = useMemo(() => {
+    return [...(photos ?? [])].sort((a, b) =>
+      sortOrder === 'asc'
+        ? titleCollator.compare(a.title, b.title)
+        : titleCollator.compare(b.title, a.title)
+    );
+  }, [photos, sortOrder]);
+
+  // Фильтрация сохраняет порядок, поэтому её можно делать поверх отсортированного массива
+  const visiblePhotos = useMemo(() => {
+    const normalizedQuery = deferredQuery.toLowerCase();
+    const album = albumId === 'all' ? null : Number(albumId);
+    return sortedPhotos.filter(
+      photo =>
+        (album === null || photo.albumId === album) &&
+        photo.title.toLowerCase().includes(normalizedQuery)
+    );
+  }, [sortedPhotos, albumId, deferredQuery]);
+
+  // Стабильная ссылка + функциональное обновление: memo у строк не ломается
+  const handleToggleFavorite = useCallback((id: number) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   if (isLoading) return <Loader text="Загружаем медиатеку..." />;
   if (error) return <ErrorMessage message={error} onRetry={refetch} />;
@@ -68,7 +150,7 @@ export default function PhotosPage() {
   return (
     <section>
       <h1>Медиатека</h1>
-      <p className="muted">Вы на странице {secondsOnPage} с</p>
+      <SecondsOnPage />
 
       <div className="toolbar">
         <input
@@ -96,19 +178,14 @@ export default function PhotosPage() {
       </div>
 
       <p>
-        Показано: {visiblePhotos.length} из {photos?.length ?? 0}. В избранном: {favorites.length}
+        Показано: {visiblePhotos.length} из {photos?.length ?? 0}. В избранном: {favorites.size}
       </p>
 
-      <div className="photo-list">
-        {visiblePhotos.map(photo => (
-          <PhotoRow
-            key={photo.id}
-            photo={photo}
-            isFavorite={favorites.includes(photo.id)}
-            onToggleFavorite={handleToggleFavorite}
-          />
-        ))}
-      </div>
+      <PhotoList
+        photos={visiblePhotos}
+        favorites={favorites}
+        onToggleFavorite={handleToggleFavorite}
+      />
     </section>
   );
 }

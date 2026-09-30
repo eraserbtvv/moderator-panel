@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react';
+import { endpoints } from '../api/endpoints';
+import { useMutation } from '../hooks/useMutation';
 import type { Comment } from '../types';
 
 type CommentFormProps = {
@@ -11,21 +13,22 @@ export function CommentForm({ postId, onCreated }: CommentFormProps) {
   const [email, setEmail] = useState('');
   const [body, setBody] = useState('');
 
-  // TODO (задача 5.1): подключите useMutation<Comment> для POST-запроса
-  // на endpoints.comments. Уберите заглушки ниже и возьмите значения из хука.
-  const isLoading = false;
-  const error: string | null = null;
+  const { isLoading, error, execute } = useMutation<Comment>(endpoints.comments);
 
   const isValid = name.trim() !== '' && email.trim() !== '' && body.trim() !== '';
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isValid || isLoading) return;
 
-    // TODO (задача 5.2):
-    // 1. отправьте { postId, name, email, body } через execute;
-    // 2. если сервер вернул комментарий -- передайте его в onCreated
-    //    и очистите поля формы;
-    // 3. если вернулся null -- поля не очищайте, ошибку покажет разметка ниже.
+    const comment = await execute({ postId, name, email, body });
+    // null -- запрос завершился ошибкой: поля не трогаем, сообщение покажет разметка ниже
+    if (!comment) return;
+
+    onCreated(comment);
+    setName('');
+    setEmail('');
+    setBody('');
   }
 
   return (

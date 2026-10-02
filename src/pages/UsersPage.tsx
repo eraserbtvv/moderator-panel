@@ -5,9 +5,6 @@ import { Loader } from '../components/Loader';
 import { useFetch } from '../hooks/useFetch';
 import type { User } from '../types';
 
-// Образец: страница полностью готова.
-// Посмотрите, как здесь обрабатываются состояния запроса,
-// и сделайте так же на своих страницах.
 export default function UsersPage() {
   const { data: users, isLoading, error, refetch } = useFetch<User[]>(endpoints.users);
 

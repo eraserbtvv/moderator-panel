@@ -27,12 +27,10 @@ export default function PostPage() {
     refetch: refetchComments,
   } = useFetch<Comment[]>(endpoints.postComments(postId));
 
-  // jsonplaceholder не сохраняет комментарии, поэтому созданные храним локально
   const [createdComments, setCreatedComments] = useState<Comment[]>([]);
   const ownComments = createdComments.filter(comment => String(comment.postId) === postId);
 
   function handleCommentCreated(comment: Comment) {
-    // Сервер всегда возвращает id: 501 -- заменяем, чтобы key не повторялся
     setCreatedComments(prev => [...prev, { ...comment, id: Date.now() }]);
   }
 

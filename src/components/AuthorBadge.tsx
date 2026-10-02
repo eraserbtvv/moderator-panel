@@ -6,7 +6,6 @@ type AuthorBadgeProps = {
   userId: number;
 };
 
-// Компонент готов. Он начнёт работать, когда вы реализуете useFetch.
 export function AuthorBadge({ userId }: AuthorBadgeProps) {
   const { data: user, isLoading, error } = useFetch<User>(endpoints.user(userId));
 

@@ -4,9 +4,7 @@ export type FetchState<T> = {
   data: T | null;
   isLoading: boolean;
   error: string | null;
-  // HTTP-статус последнего ответа. Нужен, чтобы отличить 404 от других ошибок
   status: number | null;
-  // Повторить запрос (для кнопки «Повторить»)
   refetch: () => void;
 };
 
@@ -29,7 +27,6 @@ export function useFetch<T>(url: string): FetchState<T> {
     error: null,
     status: null,
   });
-  // Счётчик попыток: его изменение перезапускает эффект с тем же url
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -46,7 +43,6 @@ export function useFetch<T>(url: string): FetchState<T> {
         const data: T = await response.json();
         setState({ data, isLoading: false, error: null, status: response.status });
       } catch (err) {
-        // Запрос отменён (сменился url или компонент размонтирован) -- это не ошибка
         if (isAbortError(err) || controller.signal.aborted) return;
 
         setState({

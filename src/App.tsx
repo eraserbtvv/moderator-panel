@@ -3,7 +3,6 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Loader } from './components/Loader';
 
-// Код каждой страницы -- в отдельном чанке, загружается при первом переходе на неё
 const PostsPage = lazy(() => import('./pages/PostsPage'));
 const PostPage = lazy(() => import('./pages/PostPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
@@ -14,7 +13,6 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        {/* Suspense внутри Layout: пока грузится чанк, шапка остаётся на месте */}
         <Route
           element={
             <Suspense fallback={<Loader text="Загружаем страницу..." />}>

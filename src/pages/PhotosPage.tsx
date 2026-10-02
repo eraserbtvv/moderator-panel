@@ -7,14 +7,10 @@ import { useFetch } from '../hooks/useFetch';
 import type { Photo } from '../types';
 import { simulateHeavyRender } from '../utils/simulateHeavyRender';
 
-// ЗАДАЧА 6. Что исправлено -- см. OPTIMIZATION.md в корне проекта.
-
 const ALBUM_IDS = Array.from({ length: 100 }, (_, i) => i + 1);
 
-// Высота строки -- как у .photo-row в index.css
 const ROW_HEIGHT = 56;
 
-// Один Collator на все сравнения: localeCompare без аргументов создаёт его на каждый вызов
 const titleCollator = new Intl.Collator();
 
 type PhotoRowProps = {
@@ -23,7 +19,6 @@ type PhotoRowProps = {
   onToggleFavorite: (id: number) => void;
 };
 
-// memo: строка перерисовывается, только если изменились её собственные пропсы
 const PhotoRow = memo(function PhotoRow({ photo, isFavorite, onToggleFavorite }: PhotoRowProps) {
   simulateHeavyRender();
 
@@ -39,8 +34,6 @@ const PhotoRow = memo(function PhotoRow({ photo, isFavorite, onToggleFavorite }:
   );
 });
 
-// Таймер живёт в отдельном компоненте: ежесекундный setState
-// перерисовывает только эту строку, а не всю страницу со списком
 function SecondsOnPage() {
   const [secondsOnPage, setSecondsOnPage] = useState(0);
 
@@ -58,7 +51,6 @@ type PhotoListProps = {
   onToggleFavorite: (id: number) => void;
 };
 
-// Виртуализированный список: в DOM только видимые строки (плюс небольшой запас)
 const PhotoList = memo(function PhotoList({ photos, favorites, onToggleFavorite }: PhotoListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -108,10 +100,8 @@ export default function PhotosPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [favorites, setFavorites] = useState<Set<number>>(() => new Set());
 
-  // Поле ввода обновляется сразу, а тяжёлая фильтрация идёт с низким приоритетом
   const deferredQuery = useDeferredValue(query);
 
-  // Сортировка 5000 записей -- только при загрузке данных и смене порядка
   const sortedPhotos = useMemo(() => {
     return [...(photos ?? [])].sort((a, b) =>
       sortOrder === 'asc'
@@ -120,7 +110,6 @@ export default function PhotosPage() {
     );
   }, [photos, sortOrder]);
 
-  // Фильтрация сохраняет порядок, поэтому её можно делать поверх отсортированного массива
   const visiblePhotos = useMemo(() => {
     const normalizedQuery = deferredQuery.toLowerCase();
     const album = albumId === 'all' ? null : Number(albumId);
@@ -131,7 +120,6 @@ export default function PhotosPage() {
     );
   }, [sortedPhotos, albumId, deferredQuery]);
 
-  // Стабильная ссылка + функциональное обновление: memo у строк не ломается
   const handleToggleFavorite = useCallback((id: number) => {
     setFavorites(prev => {
       const next = new Set(prev);

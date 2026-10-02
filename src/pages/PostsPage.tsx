@@ -16,9 +16,6 @@ export default function PostsPage() {
   const debouncedQuery = useDebounce(query, 500);
   const isTyping = query !== debouncedQuery;
 
-  // Новый поиск -- возвращаемся на первую страницу. Сбрасываем прямо во время рендера,
-  // а не в onChange: так ещё до запроса page и debouncedQuery меняются вместе
-  // и уходит один запрос, а не лишний «страница 1 со старым запросом».
   const [searchedQuery, setSearchedQuery] = useState(debouncedQuery);
   if (searchedQuery !== debouncedQuery) {
     setSearchedQuery(debouncedQuery);
@@ -47,7 +44,6 @@ export default function PostsPage() {
     );
   }
 
-  // Если пришла неполная страница, следующей страницы нет
   const hasNext = posts !== null && posts.length === POSTS_PER_PAGE;
 
   return (

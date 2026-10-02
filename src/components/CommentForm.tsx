@@ -22,7 +22,6 @@ export function CommentForm({ postId, onCreated }: CommentFormProps) {
     if (!isValid || isLoading) return;
 
     const comment = await execute({ postId, name, email, body });
-    // null -- запрос завершился ошибкой: поля не трогаем, сообщение покажет разметка ниже
     if (!comment) return;
 
     onCreated(comment);
